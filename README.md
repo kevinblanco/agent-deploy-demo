@@ -57,7 +57,19 @@ The YAML in `.harness/` is v0 ("classic") Harness YAML for the `default` org and
 
 1. **Fork, then put in your names.** The YAML uses `kevinblanco` for both the GitHub and the Docker Hub account. Replace it in `.harness/` and `.github/` (`connectors/github.yaml` and `CODEOWNERS` take your GitHub name; `connectors/dockerhub.yaml`, `service.yaml` and `pipeline.yaml` take your Docker Hub name).
 2. **Secrets** (Project Setup → Secrets → Text): `github_pat` (classic PAT with `repo`, `user`, `admin:repo_hook`) and `dockerhub_pat` (Docker Hub access token, read and write).
-3. **Cluster and delegate.** A local cluster (`k3d cluster create harness-demo`), namespaces `staging` and `production`, and a Helm delegate named `k3d-delegate` (Project Setup → Delegates → New Delegate → Helm; Harness generates the install command).
+3. **Cluster and delegate.** A local cluster (`k3d cluster create harness-demo`), namespaces `staging` and `production`, and a **classic** delegate named `k3d-delegate-classic`. New accounts are offered Delegate 3.x, which in November 2026 rejects the classic deploy tasks this pipeline uses (`DOCKER_ARTIFACT_TASK_NG Task type not supported by delegate(s)`). Install the classic one with the official Helm chart, using a delegate token from Project Settings → Delegates:
+   ```bash
+   helm repo add harness-delegate https://app.harness.io/storage/harness-download/delegate-helm-chart/
+   printf 'Delegate token: '; read -s DT; echo
+   helm upgrade -i k3d-delegate-classic harness-delegate/harness-delegate-ng \
+     --namespace harness-delegate-ng --create-namespace \
+     --set delegateName=k3d-delegate-classic --set accountId=<your-account-id> \
+     --set delegateToken="$DT" --set managerEndpoint=https://app.harness.io \
+     --set delegateDockerImage=harness/delegate:26.11.90409 \
+     --set replicas=1 --set upgrader.enabled=false
+   unset DT
+   ```
+   The image is multi-arch (amd64 and arm64). Your account ID is in any Harness URL.
 4. **Entities**, pasted into each create dialog's YAML view, in this order: `connectors/github.yaml`, `connectors/dockerhub.yaml`, `connectors/k3d-cluster.yaml`, `service.yaml`, `env-staging.yaml`, `env-production.yaml`, `infra-staging.yaml`, `infra-production.yaml`, `pipeline.yaml`, then optionally `trigger-push-main.yaml`.
 5. **People and tokens.** A user group `release_approvers` with the humans who sign off production. A service account `agent_deployer` with the **Pipeline Executor** role, and an API token for it. That token goes to the agent; it is the only Harness credential the agent gets.
 6. **The agent.** Add the [Harness MCP server](https://github.com/harness/mcp-server) to your coding agent with the service account token as `HARNESS_API_KEY`, `HARNESS_ORG=default` and `HARNESS_PROJECT=default_project`.

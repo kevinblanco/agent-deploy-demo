@@ -56,7 +56,7 @@ pipeline:
                   type: BuildAndPushDockerRegistry
                   spec:
                     connectorRef: dockerhub
-                    repo: kevinblanco/cart-pricing
+                    repo: YOUR_DOCKERHUB_USERNAME/cart-pricing
                     tags:
                       - <+pipeline.sequenceId>
 
@@ -94,7 +94,7 @@ pipeline:
                     shell: Bash
                     onDelegate: true
                     delegateSelectors:
-                      - k3d-delegate
+                      - k3d-delegate-classic
                     executionTarget: {}
                     environmentVariables:
                       - name: BASE_URL
@@ -269,7 +269,7 @@ pipeline:
                     shell: Bash
                     onDelegate: true
                     delegateSelectors:
-                      - k3d-delegate
+                      - k3d-delegate-classic
                     executionTarget: {}
                     environmentVariables:
                       - name: BASE_URL
