@@ -8,13 +8,13 @@ connector:
   projectIdentifier: default_project
   type: Github
   spec:
-    url: https://github.com/YOUR_GITHUB_USERNAME/agent-deploy-demo
+    url: https://github.com/kevinblanco/agent-deploy-demo
     authentication:
       type: Http
       spec:
         type: UsernameToken
         spec:
-          username: YOUR_GITHUB_USERNAME
+          username: kevinblanco
           tokenRef: github_pat
     apiAccess:
       type: Token

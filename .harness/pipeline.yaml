@@ -56,7 +56,7 @@ pipeline:
                   type: BuildAndPushDockerRegistry
                   spec:
                     connectorRef: dockerhub
-                    repo: YOUR_DOCKERHUB_USERNAME/cart-pricing
+                    repo: kevinblanco/cart-pricing
                     tags:
                       - <+pipeline.sequenceId>
 

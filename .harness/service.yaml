@@ -30,7 +30,7 @@ service:
               type: DockerRegistry
               spec:
                 connectorRef: dockerhub
-                imagePath: YOUR_DOCKERHUB_USERNAME/cart-pricing
+                imagePath: kevinblanco/cart-pricing
                 # The tag CI just pushed in this same pipeline run.
                 tag: <+pipeline.sequenceId>
   gitOpsEnabled: false

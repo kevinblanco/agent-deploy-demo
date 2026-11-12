@@ -1,7 +1,7 @@
 # The gate belongs to humans. Coding agents can change the app and its unit
 # tests, but a change to the contract checks or to the pipeline itself needs
-# a human owner's review. Replace @YOUR_GITHUB_USERNAME before pushing, and turn
+# a human owner's review. In a fork, put your own username here and turn
 # on "Require review from Code Owners" in the branch protection for main.
-/contract/   @YOUR_GITHUB_USERNAME
-/.harness/   @YOUR_GITHUB_USERNAME
-/.github/    @YOUR_GITHUB_USERNAME
+/contract/   @kevinblanco
+/.harness/   @kevinblanco
+/.github/    @kevinblanco

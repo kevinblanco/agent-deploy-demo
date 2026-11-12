@@ -55,12 +55,7 @@ git apply -R scenarios/agent-regression.patch
 
 The YAML in `.harness/` is v0 ("classic") Harness YAML for the `default` org and `default_project`. Secrets and connectors are referenced by ID only; no values are stored here.
 
-1. **Fork, then fill in your names.**
-   ```bash
-   grep -rl 'YOUR_GITHUB_USERNAME\|YOUR_DOCKERHUB_USERNAME' .harness .github \
-     | xargs sed -i '' -e 's/YOUR_GITHUB_USERNAME/your-github-name/g' -e 's/YOUR_DOCKERHUB_USERNAME/your-dockerhub-name/g'
-   ```
-   (On Linux, use `sed -i` without the `''`.)
+1. **Fork, then put in your names.** The YAML uses `kevinblanco` for both the GitHub and the Docker Hub account. Replace it in `.harness/` and `.github/` (`connectors/github.yaml` and `CODEOWNERS` take your GitHub name; `connectors/dockerhub.yaml`, `service.yaml` and `pipeline.yaml` take your Docker Hub name).
 2. **Secrets** (Project Setup → Secrets → Text): `github_pat` (classic PAT with `repo`, `user`, `admin:repo_hook`) and `dockerhub_pat` (Docker Hub access token, read and write).
 3. **Cluster and delegate.** A local cluster (`k3d cluster create harness-demo`), namespaces `staging` and `production`, and a Helm delegate named `k3d-delegate` (Project Setup → Delegates → New Delegate → Helm; Harness generates the install command).
 4. **Entities**, pasted into each create dialog's YAML view, in this order: `connectors/github.yaml`, `connectors/dockerhub.yaml`, `connectors/k3d-cluster.yaml`, `service.yaml`, `env-staging.yaml`, `env-production.yaml`, `infra-staging.yaml`, `infra-production.yaml`, `pipeline.yaml`, then optionally `trigger-push-main.yaml`.
