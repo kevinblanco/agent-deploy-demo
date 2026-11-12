@@ -1,0 +1,15 @@
+{
+  "name": "cart-pricing",
+  "version": "1.0.0",
+  "description": "A tiny pricing API used to show a coding agent deploying through a governed Harness pipeline.",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "test:ci": "node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=junit.xml \"test/**/*.test.js\"",
+    "contract": "bash contract/contract-check.sh"
+  },
+  "license": "MIT"
+}

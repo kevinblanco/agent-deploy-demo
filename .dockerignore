@@ -1,0 +1,9 @@
+node_modules
+test
+contract
+deploy
+.harness
+.github
+scenarios
+*.md
+junit.xml
