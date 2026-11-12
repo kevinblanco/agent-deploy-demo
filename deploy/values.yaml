@@ -1,0 +1,10 @@
+# Values for the Kubernetes manifests in deploy/templates.
+# Harness resolves the <+...> expressions at deploy time: the image is the one
+# CI just built, and the namespace comes from the stage's infrastructure.
+name: cart-pricing
+replicas: 2
+image: <+artifact.image>
+version: <+artifact.tag>
+namespace: <+infra.namespace>
+containerPort: 8080
+servicePort: 80

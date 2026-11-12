@@ -1,0 +1,15 @@
+infrastructureDefinition:
+  name: staging-k3d
+  identifier: staging_k3d
+  description: "Namespace 'staging' on the local k3d cluster"
+  tags: {}
+  orgIdentifier: default
+  projectIdentifier: default_project
+  environmentRef: staging
+  deploymentType: Kubernetes
+  type: KubernetesDirect
+  spec:
+    connectorRef: k3d_cluster
+    namespace: staging
+    releaseName: release-<+INFRA_KEY>
+  allowSimultaneousDeployments: false

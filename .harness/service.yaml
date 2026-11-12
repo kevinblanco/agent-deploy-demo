@@ -1,0 +1,36 @@
+service:
+  name: cart-pricing
+  identifier: cart_pricing
+  orgIdentifier: default
+  projectIdentifier: default_project
+  serviceDefinition:
+    type: Kubernetes
+    spec:
+      manifests:
+        - manifest:
+            identifier: cart_pricing_manifests
+            type: K8sManifest
+            spec:
+              store:
+                type: Github
+                spec:
+                  connectorRef: github
+                  gitFetchType: Branch
+                  branch: main
+                  paths:
+                    - deploy/templates
+              valuesPaths:
+                - deploy/values.yaml
+              skipResourceVersioning: false
+      artifacts:
+        primary:
+          primaryArtifactRef: cart_pricing_image
+          sources:
+            - identifier: cart_pricing_image
+              type: DockerRegistry
+              spec:
+                connectorRef: dockerhub
+                imagePath: YOUR_DOCKERHUB_USERNAME/cart-pricing
+                # The tag CI just pushed in this same pipeline run.
+                tag: <+pipeline.sequenceId>
+  gitOpsEnabled: false

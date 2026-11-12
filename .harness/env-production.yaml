@@ -1,0 +1,9 @@
+environment:
+  name: production
+  identifier: production
+  description: ""
+  tags: {}
+  type: Production
+  orgIdentifier: default
+  projectIdentifier: default_project
+  variables: []

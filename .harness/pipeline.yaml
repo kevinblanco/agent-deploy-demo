@@ -1,0 +1,382 @@
+# agent-deploy-demo: build → staging (verified) → human approval → production.
+#
+# A coding agent starts this pipeline through the Harness MCP server, using a
+# service-account token with the built-in Pipeline Executor role. It can run
+# the pipeline. It cannot edit it, cannot see the cluster credentials (the
+# delegate holds those), and cannot approve production.
+pipeline:
+  name: agent-deploy-demo
+  identifier: agent_deploy_demo
+  projectIdentifier: default_project
+  orgIdentifier: default
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        connectorRef: github
+        build:
+          type: branch
+          spec:
+            branch: main
+  stages:
+    # 1. Build: unit tests, then the image. Runs on Harness Cloud.
+    - stage:
+        name: Build
+        identifier: build
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            # Arm64 because the demo cluster runs on an Apple Silicon Mac.
+            # Use Amd64 for an x86 cluster.
+            arch: Arm64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  name: Unit tests
+                  identifier: unit_tests
+                  type: Run
+                  spec:
+                    connectorRef: dockerhub
+                    image: node:22-alpine
+                    shell: Sh
+                    command: npm run test:ci
+                    reports:
+                      type: JUnit
+                      spec:
+                        paths:
+                          - junit.xml
+              - step:
+                  name: Build and push image
+                  identifier: build_and_push
+                  type: BuildAndPushDockerRegistry
+                  spec:
+                    connectorRef: dockerhub
+                    repo: YOUR_DOCKERHUB_USERNAME/cart-pricing
+                    tags:
+                      - <+pipeline.sequenceId>
+
+    # 2. Staging: deploys on its own, then proves the behaviour. If the
+    #    contract checks fail, the stage rolls back to the last good release.
+    - stage:
+        name: Deploy to staging
+        identifier: deploy_staging
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: cart_pricing
+          environment:
+            environmentRef: staging
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: staging_k3d
+          execution:
+            steps:
+              - step:
+                  name: Rolling deploy
+                  identifier: rolling_deploy
+                  type: K8sRollingDeploy
+                  timeout: 10m
+                  spec:
+                    skipDryRun: false
+                    pruningEnabled: false
+              - step:
+                  name: Contract checks
+                  identifier: contract_checks
+                  type: ShellScript
+                  timeout: 5m
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    delegateSelectors:
+                      - k3d-delegate
+                    executionTarget: {}
+                    environmentVariables:
+                      - name: BASE_URL
+                        type: String
+                        value: http://cart-pricing.<+infra.namespace>.svc.cluster.local
+                      - name: EXPECTED_VERSION
+                        type: String
+                        value: <+artifact.tag>
+                    outputVariables: []
+                    source:
+                      type: Inline
+                      spec:
+                        # The gate. Same checks as contract/contract-check.sh in the
+                        # repo, but this copy lives in the pipeline, which the
+                        # agent's token can run and cannot edit.
+                        script: |
+                          #!/usr/bin/env bash
+                          # Contract checks for cart-pricing: the finance rules, as live HTTP calls.
+                          #
+                          # Coding agents may change the app and its unit tests, but not these checks.
+                          # The pipeline's verify step carries its own copy of this script, and that
+                          # copy is the one that gates releases: the agent's Harness token can run the
+                          # pipeline but cannot edit it. A failure rolls the deployment back.
+                          #
+                          # Usage: contract/contract-check.sh http://localhost:8080
+                          #   EXPECTED_VERSION=42 contract/contract-check.sh <url>   waits for build 42 first
+                          # Needs only bash and curl (or wget), so it runs on the Harness delegate.
+                          set -uo pipefail
+
+                          BASE_URL="${1:-${BASE_URL:-http://localhost:8080}}"
+                          EXPECTED_VERSION="${EXPECTED_VERSION:-}"
+                          CART='{"items":[{"sku":"KB-01","unitPrice":1999,"qty":2},{"sku":"MS-02","unitPrice":4999,"qty":1}]'
+                          failures=0
+
+                          if ! command -v curl >/dev/null && ! command -v wget >/dev/null; then
+                            echo "contract-check needs curl or wget"
+                            exit 2
+                          fi
+
+                          get() { # get <path>  → prints the body
+                            if command -v curl >/dev/null; then
+                              curl -s "$BASE_URL$1"
+                            else
+                              wget -q -O - "$BASE_URL$1"
+                            fi
+                          }
+
+                          post() { # post <path> <json>  → prints the body, then the HTTP status on the last line
+                            if command -v curl >/dev/null; then
+                              curl -s -w '\n%{http_code}' -H 'content-type: application/json' -d "$2" "$BASE_URL$1"
+                            else
+                              wget -q -S -O - --header='content-type: application/json' --post-data="$2" "$BASE_URL$1" 2>&1 \
+                                | awk '/^  HTTP/{code=$2} !/^  /{print} END{print code}'
+                            fi
+                          }
+
+                          check() { # check <name> <path> <json> <expected status> <expected body fragment>
+                            local out status body
+                            out="$(post "$2" "$3")"
+                            status="$(tail -n1 <<<"$out")"
+                            body="$(sed '$d' <<<"$out")"
+                            if [[ "$status" == "$4" && "$body" == *"$5"* ]]; then
+                              printf '  ✓ %s\n' "$1"
+                            else
+                              printf '  ✗ %s\n      expected %s %s\n      got      %s %s\n' "$1" "$4" "$5" "$status" "$body"
+                              failures=$((failures + 1))
+                            fi
+                          }
+
+                          # Test the build that was just deployed, not a pod left over from the last one.
+                          if [[ -n "$EXPECTED_VERSION" ]]; then
+                            answering=""
+                            for _ in $(seq 1 30); do
+                              answering="$(get /version 2>/dev/null)"
+                              [[ "$answering" == *"\"version\":\"$EXPECTED_VERSION\""* ]] && break
+                              sleep 2
+                            done
+                            if [[ "$answering" != *"\"version\":\"$EXPECTED_VERSION\""* ]]; then
+                              echo "Build $EXPECTED_VERSION never answered at $BASE_URL (last answer: ${answering:-none})."
+                              exit 1
+                            fi
+                            echo "Contract checks for build $EXPECTED_VERSION at $BASE_URL"
+                          else
+                            echo "Contract checks against $BASE_URL"
+                          fi
+
+                          check "subtotal = sum(price × qty)" /quote "$CART}" 200 '"total":8997'
+                          check "SAVE10 takes 10% off, rounded half up" /quote "$CART,\"discountCode\":\"SAVE10\"}" 200 '"discount":900'
+                          check "tax applies after the discount" /quote "$CART,\"discountCode\":\"SAVE10\",\"taxRate\":0.0825}" 200 '"total":8765'
+                          check "unknown codes are rejected" /quote "$CART,\"discountCode\":\"FREE100\"}" 400 'unknown discount code'
+
+                          if (( failures > 0 )); then
+                            echo "$failures contract check(s) failed: this version must not ship."
+                            exit 1
+                          fi
+                          echo "All contract checks passed."
+            rollbackSteps:
+              - step:
+                  name: Roll back
+                  identifier: roll_back
+                  type: K8sRollingRollback
+                  timeout: 10m
+                  spec:
+                    pruningEnabled: false
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
+
+    # 3. The risk boundary: production waits for a person in release_approvers.
+    #    Whoever started the run can never approve it.
+    - stage:
+        name: Approve production
+        identifier: approve_production
+        type: Approval
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: Release sign-off
+                  identifier: release_signoff
+                  type: HarnessApproval
+                  # Free-plan runs stop after 4 hours, so the approval times out first.
+                  timeout: 3h
+                  spec:
+                    approvalMessage: |-
+                      Build #<+pipeline.sequenceId> passed the contract checks in staging.
+                      Started by: <+pipeline.triggeredBy.name>
+                      Approve to deploy it to production.
+                    includePipelineExecutionHistory: true
+                    isAutoRejectEnabled: false
+                    approvers:
+                      userGroups:
+                        - release_approvers
+                      minimumCount: 1
+                      disallowPipelineExecutor: true
+                    approverInputs: []
+
+    # 4. Production: the exact build staging verified, checked again.
+    - stage:
+        name: Deploy to production
+        identifier: deploy_production
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            useFromStage:
+              stage: deploy_staging
+          environment:
+            environmentRef: production
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: production_k3d
+          execution:
+            steps:
+              - step:
+                  name: Rolling deploy
+                  identifier: rolling_deploy
+                  type: K8sRollingDeploy
+                  timeout: 10m
+                  spec:
+                    skipDryRun: false
+                    pruningEnabled: false
+              - step:
+                  name: Contract checks
+                  identifier: contract_checks
+                  type: ShellScript
+                  timeout: 5m
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    delegateSelectors:
+                      - k3d-delegate
+                    executionTarget: {}
+                    environmentVariables:
+                      - name: BASE_URL
+                        type: String
+                        value: http://cart-pricing.<+infra.namespace>.svc.cluster.local
+                      - name: EXPECTED_VERSION
+                        type: String
+                        value: <+artifact.tag>
+                    outputVariables: []
+                    source:
+                      type: Inline
+                      spec:
+                        # The gate. Same checks as contract/contract-check.sh in the
+                        # repo, but this copy lives in the pipeline, which the
+                        # agent's token can run and cannot edit.
+                        script: |
+                          #!/usr/bin/env bash
+                          # Contract checks for cart-pricing: the finance rules, as live HTTP calls.
+                          #
+                          # Coding agents may change the app and its unit tests, but not these checks.
+                          # The pipeline's verify step carries its own copy of this script, and that
+                          # copy is the one that gates releases: the agent's Harness token can run the
+                          # pipeline but cannot edit it. A failure rolls the deployment back.
+                          #
+                          # Usage: contract/contract-check.sh http://localhost:8080
+                          #   EXPECTED_VERSION=42 contract/contract-check.sh <url>   waits for build 42 first
+                          # Needs only bash and curl (or wget), so it runs on the Harness delegate.
+                          set -uo pipefail
+
+                          BASE_URL="${1:-${BASE_URL:-http://localhost:8080}}"
+                          EXPECTED_VERSION="${EXPECTED_VERSION:-}"
+                          CART='{"items":[{"sku":"KB-01","unitPrice":1999,"qty":2},{"sku":"MS-02","unitPrice":4999,"qty":1}]'
+                          failures=0
+
+                          if ! command -v curl >/dev/null && ! command -v wget >/dev/null; then
+                            echo "contract-check needs curl or wget"
+                            exit 2
+                          fi
+
+                          get() { # get <path>  → prints the body
+                            if command -v curl >/dev/null; then
+                              curl -s "$BASE_URL$1"
+                            else
+                              wget -q -O - "$BASE_URL$1"
+                            fi
+                          }
+
+                          post() { # post <path> <json>  → prints the body, then the HTTP status on the last line
+                            if command -v curl >/dev/null; then
+                              curl -s -w '\n%{http_code}' -H 'content-type: application/json' -d "$2" "$BASE_URL$1"
+                            else
+                              wget -q -S -O - --header='content-type: application/json' --post-data="$2" "$BASE_URL$1" 2>&1 \
+                                | awk '/^  HTTP/{code=$2} !/^  /{print} END{print code}'
+                            fi
+                          }
+
+                          check() { # check <name> <path> <json> <expected status> <expected body fragment>
+                            local out status body
+                            out="$(post "$2" "$3")"
+                            status="$(tail -n1 <<<"$out")"
+                            body="$(sed '$d' <<<"$out")"
+                            if [[ "$status" == "$4" && "$body" == *"$5"* ]]; then
+                              printf '  ✓ %s\n' "$1"
+                            else
+                              printf '  ✗ %s\n      expected %s %s\n      got      %s %s\n' "$1" "$4" "$5" "$status" "$body"
+                              failures=$((failures + 1))
+                            fi
+                          }
+
+                          # Test the build that was just deployed, not a pod left over from the last one.
+                          if [[ -n "$EXPECTED_VERSION" ]]; then
+                            answering=""
+                            for _ in $(seq 1 30); do
+                              answering="$(get /version 2>/dev/null)"
+                              [[ "$answering" == *"\"version\":\"$EXPECTED_VERSION\""* ]] && break
+                              sleep 2
+                            done
+                            if [[ "$answering" != *"\"version\":\"$EXPECTED_VERSION\""* ]]; then
+                              echo "Build $EXPECTED_VERSION never answered at $BASE_URL (last answer: ${answering:-none})."
+                              exit 1
+                            fi
+                            echo "Contract checks for build $EXPECTED_VERSION at $BASE_URL"
+                          else
+                            echo "Contract checks against $BASE_URL"
+                          fi
+
+                          check "subtotal = sum(price × qty)" /quote "$CART}" 200 '"total":8997'
+                          check "SAVE10 takes 10% off, rounded half up" /quote "$CART,\"discountCode\":\"SAVE10\"}" 200 '"discount":900'
+                          check "tax applies after the discount" /quote "$CART,\"discountCode\":\"SAVE10\",\"taxRate\":0.0825}" 200 '"total":8765'
+                          check "unknown codes are rejected" /quote "$CART,\"discountCode\":\"FREE100\"}" 400 'unknown discount code'
+
+                          if (( failures > 0 )); then
+                            echo "$failures contract check(s) failed: this version must not ship."
+                            exit 1
+                          fi
+                          echo "All contract checks passed."
+            rollbackSteps:
+              - step:
+                  name: Roll back
+                  identifier: roll_back
+                  type: K8sRollingRollback
+                  timeout: 10m
+                  spec:
+                    pruningEnabled: false
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback

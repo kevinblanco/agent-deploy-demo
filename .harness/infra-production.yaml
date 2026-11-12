@@ -1,0 +1,15 @@
+infrastructureDefinition:
+  name: production-k3d
+  identifier: production_k3d
+  description: "Namespace 'production' on the local k3d cluster"
+  tags: {}
+  orgIdentifier: default
+  projectIdentifier: default_project
+  environmentRef: production
+  deploymentType: Kubernetes
+  type: KubernetesDirect
+  spec:
+    connectorRef: k3d_cluster
+    namespace: production
+    releaseName: release-<+INFRA_KEY>
+  allowSimultaneousDeployments: false

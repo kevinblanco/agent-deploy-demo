@@ -1,0 +1,19 @@
+# Docker Hub connector. Secret "dockerhub_pat" holds a Docker Hub access token.
+# executeOnDelegate: false = "connect through Harness Platform", which Harness
+# Cloud builds need.
+connector:
+  name: dockerhub
+  identifier: dockerhub
+  description: Image registry for cart-pricing
+  orgIdentifier: default
+  projectIdentifier: default_project
+  type: DockerRegistry
+  spec:
+    dockerRegistryUrl: https://index.docker.io/v2/
+    providerType: DockerHub
+    auth:
+      type: UsernamePassword
+      spec:
+        username: YOUR_DOCKERHUB_USERNAME
+        passwordRef: dockerhub_pat
+    executeOnDelegate: false

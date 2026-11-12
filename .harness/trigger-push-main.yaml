@@ -1,0 +1,27 @@
+# Runs the pipeline on every push to main. It ships disabled: in the demo the
+# agent starts each run through the MCP server, and a push trigger would start
+# a second run for the same commit. Turn it on for the everyday human path.
+# If pasting this YAML fails in your account, create it in the UI instead:
+# Triggers → New Trigger → GitHub → Push → branch main.
+trigger:
+  name: on-push-main
+  identifier: on_push_main
+  enabled: false
+  orgIdentifier: default
+  projectIdentifier: default_project
+  pipelineIdentifier: agent_deploy_demo
+  source:
+    type: Webhook
+    spec:
+      type: Github
+      spec:
+        type: Push
+        spec:
+          connectorRef: github
+          autoAbortPreviousExecutions: false
+          payloadConditions:
+            - key: targetBranch
+              operator: Equals
+              value: main
+          headerConditions: []
+          actions: []
