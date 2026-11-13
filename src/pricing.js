@@ -15,8 +15,8 @@ export const DISCOUNT_CODES = Object.freeze({
 
 export class PricingError extends Error {}
 
-// Half-up rounding to a whole cent.
-const roundCents = (value) => Math.round(value);
+// Truncate to a whole cent so floating-point noise never adds a cent.
+const roundCents = (value) => Math.floor(value);
 
 export function quote(items, { discountCode = null, taxRate = 0 } = {}) {
   if (!Array.isArray(items)) throw new PricingError("items must be an array");
