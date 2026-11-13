@@ -94,7 +94,7 @@ pipeline:
                     shell: Bash
                     onDelegate: true
                     delegateSelectors:
-                      - k3d-delegate-classic
+                      - k3d-staging-delegate
                     executionTarget: {}
                     environmentVariables:
                       - name: BASE_URL
@@ -271,7 +271,7 @@ pipeline:
                     shell: Bash
                     onDelegate: true
                     delegateSelectors:
-                      - k3d-delegate-classic
+                      - k3d-production-delegate
                     executionTarget: {}
                     environmentVariables:
                       - name: BASE_URL

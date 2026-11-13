@@ -1,0 +1,18 @@
+# The staging namespace of the local k3d cluster, reached through the delegate
+# k3d-staging-delegate (Helm chart harness-delegate-ng, namespace harness-staging).
+# That delegate's service account has the "edit" role in namespace staging and
+# nothing else: it can't touch the other environment or anything
+# cluster-wide, and no one outside the cluster, the agent included, holds
+# its credentials.
+connector:
+  name: k3d-staging
+  identifier: k3d_staging
+  description: k3d namespace staging via its own namespace-scoped delegate
+  orgIdentifier: default
+  projectIdentifier: default_project
+  type: K8sCluster
+  spec:
+    credential:
+      type: InheritFromDelegate
+    delegateSelectors:
+      - k3d-staging-delegate

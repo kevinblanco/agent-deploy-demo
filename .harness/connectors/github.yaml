@@ -1,5 +1,6 @@
-# Account or project connector to the demo repo. Secret "github_pat" holds a
-# classic PAT with scopes: repo, user, admin:repo_hook.
+# Repo connector for the CI clone. Secret "github_pat" holds a fine-grained
+# token for this one repository with Contents: read-only. Add Webhooks read
+# and write only if you turn on the push trigger.
 connector:
   name: github
   identifier: github

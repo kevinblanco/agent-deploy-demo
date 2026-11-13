@@ -15,6 +15,14 @@ spec:
       labels:
         app: {{.Values.name}}
     spec:
+      # Passes Pod Security "restricted", which both namespaces enforce.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: {{.Values.name}}
           image: {{.Values.image}}
@@ -23,6 +31,11 @@ spec:
           env:
             - name: APP_VERSION
               value: "{{.Values.version}}"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           readinessProbe:
             httpGet:
               path: /healthz

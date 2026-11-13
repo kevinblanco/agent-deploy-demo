@@ -9,7 +9,7 @@ infrastructureDefinition:
   deploymentType: Kubernetes
   type: KubernetesDirect
   spec:
-    connectorRef: k3d_cluster
+    connectorRef: k3d_staging
     namespace: staging
     releaseName: release-<+INFRA_KEY>
   allowSimultaneousDeployments: false

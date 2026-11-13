@@ -1,3 +1,8 @@
+# The manifests and values live in the Harness File Store, not in Git.
+# The agent can push to this repo, but its Pipeline Executor role can only
+# use File Store files, not edit them, so it can't change what gets applied
+# or reference a secret from a values file. deploy/ in the repo is the
+# source copy a person uploads; editing it changes nothing on its own.
 service:
   name: cart-pricing
   identifier: cart_pricing
@@ -12,15 +17,12 @@ service:
             type: K8sManifest
             spec:
               store:
-                type: Github
+                type: Harness
                 spec:
-                  connectorRef: github
-                  gitFetchType: Branch
-                  branch: main
-                  paths:
-                    - deploy/templates
+                  files:
+                    - /cart-pricing/templates
               valuesPaths:
-                - deploy/values.yaml
+                - /cart-pricing/values.yaml
               skipResourceVersioning: false
       artifacts:
         primary:
