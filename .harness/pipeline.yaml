@@ -212,6 +212,8 @@ pipeline:
         name: Approve production
         identifier: approve_production
         type: Approval
+        # Stages default to a 1h timeout, which wins over the step's own timeout.
+        timeout: 3h
         spec:
           execution:
             steps:
